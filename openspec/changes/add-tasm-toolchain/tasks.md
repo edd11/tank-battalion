@@ -24,4 +24,4 @@
 
 - [ ] 5.1 Run `./build.sh` and confirm `build/main.exe` is produced successfully (requires DOSBox GUI — run locally)
 - [ ] 5.2 Verify the produced .exe runs correctly in DOSBox (requires DOSBox GUI — run locally)
-- [ ] 5.3 Commit all new files to the repository
+- [x] 5.3 Commit all new files to the repository

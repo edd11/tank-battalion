@@ -3,7 +3,7 @@ echo Building Tank Battalion...
 echo %date% %time% > ..\build\build.log
 echo. >> ..\build\build.log
 echo TASM 4.1 compile... >> ..\build\build.log
-tasm /zi /m2 main.asm, ..\build\main.obj, ..\build\main.lst >> ..\build\build.log 2>&1
+tasm /zi /m3 main.asm, ..\build\main.obj, ..\build\main.lst >> ..\build\build.log 2>&1
 if errorlevel 1 goto error
 echo TASM: OK >> ..\build\build.log
 echo. >> ..\build\build.log

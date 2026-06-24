@@ -2,13 +2,12 @@
 ; TANK BATTALION - Sega SG-1000 Clone
 ; TASM x86 Real Mode for DOS/VGA Mode 13h
 ;===========================================================================
-    .MODEL small
-    .STACK 200h
+DGROUP GROUP _DATA, STACK
 
 ;===========================================================================
 ; DATA SEGMENT
 ;===========================================================================
-    .DATA
+_DATA SEGMENT WORD PUBLIC 'DATA'
 
 ;----- GAME FEEL VARIABLES (Tunable speeds) -----
 PLAYER_SPEED        dw 4
@@ -743,12 +742,27 @@ LEVEL_OFFSETS:
 GRID_Y_MULT:
     dw 0, 13, 26, 39, 52, 65, 78, 91, 104, 117, 130, 143
 
-    .CODE
-    .STARTUP
+_DATA ENDS
+
+STACK SEGMENT PARA STACK 'STACK'
+    DB 200h DUP(?)
+    stack_end LABEL WORD
+STACK ENDS
+
+_TEXT SEGMENT WORD PUBLIC 'CODE'
+    ASSUME CS:_TEXT, DS:DGROUP, SS:DGROUP
 
 ;===========================================================================
 ; GAME ENTRY POINT
 ;===========================================================================
+
+    ORG 100h
+
+Start:
+    MOV AX, DGROUP
+    MOV DS, AX
+    MOV SS, AX
+    MOV SP, OFFSET DGROUP:stack_end
 
     CALL GAME_INIT
     CALL GAME_MAIN_LOOP
@@ -1008,9 +1022,10 @@ GET_MAP_INDEX PROC
     XOR BH, BH
     SHL BX, 1
     MOV SI, BX
-    MOV BL, AL
+    ADD SI, offset GRID_Y_MULT
+    MOV AX, [SI]
     XOR BH, BH
-    MOV AX, [GRID_Y_MULT + SI]
+    MOV BL, AL
     ADD BX, AX
     POP SI
     POP AX
@@ -1130,7 +1145,7 @@ KEYBOARD_HANDLER PROC
     PUSH AX
     PUSH BX
     PUSH DS
-    MOV AX, @DATA
+    MOV AX, DGROUP
     MOV DS, AX
     IN AL, 60h
     MOV BL, AL
@@ -1286,7 +1301,8 @@ GotFontIdx:
     XOR AH, AH
     SHL AX, 1
     MOV BX, AX
-    MOV SI, [FONT_TABLE + BX]
+    ADD BX, offset FONT_TABLE
+    MOV SI, [BX]
     CMP SI, 0
     JNE FontAddrDone
     LEA SI, FONT_0
@@ -1583,7 +1599,8 @@ LOAD_LEVEL PROC
 LvlOK:
     SHL AX, 1
     MOV BX, AX
-    MOV SI, [LEVEL_OFFSETS + BX]
+    ADD BX, offset LEVEL_OFFSETS
+    MOV SI, [BX]
     LEA DI, MAP_ARRAY
     MOV CX, 156
     PUSH DS
@@ -1895,9 +1912,13 @@ DECREMENT_COOLDOWNS ENDP
 
 UPDATE_PLAYER PROC
     CMP BYTE PTR [PLAYER_ALIVE], 1
-    JNE NoPlayerUpdate
+    JE DoPlayerCheck
+    JMP NoPlayerUpdate
+DoPlayerCheck:
     CMP [PLAYER_COOLDOWN], 0
-    JNE NoPlayerUpdate
+    JE CooldownReady
+    JMP NoPlayerUpdate
+CooldownReady:
 
     CMP [KEY_ENTER], 1
     JNE NotPausing
@@ -2041,7 +2062,9 @@ SPAWN_ENEMIES PROC
     JMP SpawnDone
 TryEnemySpawn:
     CMP BYTE PTR [ENEMIES_REMAINING], 0
-    JE SpawnDone
+    JNE ChkActiveEnemies
+    JMP SpawnDone
+ChkActiveEnemies:
     MOV CX, 0
     XOR BX, BX
 CntActive:
@@ -2053,7 +2076,9 @@ CntNext:
     CMP BX, MAX_ENEMIES
     JL CntActive
     CMP CX, MAX_ENEMIES
-    JAE SpawnDone
+    JB SpawnFindSlot
+    JMP SpawnDone
+SpawnFindSlot:
     XOR BX, BX
 FindSlotE:
     CMP [ENEMY_ACTIVE + BX], 0
@@ -2379,7 +2404,8 @@ EVALUATE_DIRECTIONS PROC
     MOV BYTE PTR [TEMP_BYTE], 2
     CALL RNG_GET_BYTE
     CMP AL, 76
-    JB UseDown
+    JAE TryRight
+    JMP UseDown
 
 TryRight:
     MOV AL, [ENEMY_GRID_X + BX]
@@ -2395,7 +2421,8 @@ TryRight:
     MOV BYTE PTR [TEMP_BYTE], 1
     CALL RNG_GET_BYTE
     CMP AL, 76
-    JB UseRight
+    JAE TryLeft
+    JMP UseRight
 
 TryLeft:
     MOV AL, [ENEMY_GRID_X + BX]
@@ -2411,7 +2438,8 @@ TryLeft:
     MOV BYTE PTR [TEMP_BYTE], 3
     CALL RNG_GET_BYTE
     CMP AL, 76
-    JB UseLeft
+    JAE TryUp
+    JMP UseLeft
 
 TryUp:
     MOV AL, [ENEMY_GRID_Y + BX]
@@ -2511,7 +2539,9 @@ TRY_MOVE_CURRENT_DIR PROC
     MOV AL, [ENEMY_GRID_X + BX]
     DEC AL
     CMP AL, 13
-    JAE CMDone
+    JB MoveLeftOk
+    JMP CMDone
+MoveLeftOk:
     MOV BL, [ENEMY_GRID_Y + BX]
     CALL IS_POSITION_BLOCKED
     CMP AL, 1
@@ -2585,10 +2615,14 @@ TRY_ENEMY_SHOOT PROC
     PUSH DX
 
     CMP [ENEMY_BULLET_COUNT + BX], 2
-    JAE NoEShoot
+    JB EShootAliveCheck
+    JMP NoEShoot
+EShootAliveCheck:
 
     CMP BYTE PTR [PLAYER_ALIVE], 1
-    JNE NoEShoot
+    JE EShootDoCheck
+    JMP NoEShoot
+EShootDoCheck:
 
     MOV AL, [ENEMY_GRID_X + BX]
     CMP AL, [PLAYER_GRID_X]
@@ -2620,33 +2654,34 @@ EShootFound:
     JB NoEShoot
 
     PUSH BX
-    XOR CX, CX
+    XOR SI, SI
 FindEBullet:
-    CMP [BULLET_ACTIVE + CX], 0
+    CMP [BULLET_ACTIVE + SI], 0
     JE GotEBullet
-    INC CX
-    CMP CX, MAX_BULLETS
+    INC SI
+    CMP SI, MAX_BULLETS
     JL FindEBullet
     POP BX
     JMP NoEShoot
 
 GotEBullet:
-    MOV [BULLET_ACTIVE + CX], 1
+    MOV [BULLET_ACTIVE + SI], 1
     MOV AL, [ENEMY_GRID_X + BX]
-    MOV [BULLET_GRID_X + CX], AL
+    MOV [BULLET_GRID_X + SI], AL
     MOV AL, [ENEMY_GRID_Y + BX]
-    MOV [BULLET_GRID_Y + CX], AL
+    MOV [BULLET_GRID_Y + SI], AL
     MOV AX, [ENEMY_PIXEL_X + BX]
-    MOV [BULLET_PIXEL_X + CX], AX
+    MOV [BULLET_PIXEL_X + SI], AX
     MOV AX, [ENEMY_PIXEL_Y + BX]
-    MOV [BULLET_PIXEL_Y + CX], AX
-    MOV [BULLET_DIR + CX], DL
-    MOV BYTE PTR [BULLET_OWNER + CX], 1
+    MOV [BULLET_PIXEL_Y + SI], AX
+    MOV [BULLET_DIR + SI], DL
+    MOV BYTE PTR [BULLET_OWNER + SI], 1
     MOV AX, [BULLET_SPEED_ENEMY]
-    MOV [BULLET_COOLDOWN + CX], AX
-    MOV SI, BX
+    MOV [BULLET_COOLDOWN + SI], AX
+    PUSH SI
     POP BX
-    INC [ENEMY_BULLET_COUNT + SI]
+    POP BX
+    INC [ENEMY_BULLET_COUNT + BX]
 
 NoEShoot:
     POP DX
@@ -2736,10 +2771,14 @@ BulletDown:
 BulletCalc:
     MOV AX, [TEMP_X]
     CMP AX, 13
-    JAE DeactB
+    JB ChkYBound
+    JMP DeactB
+ChkYBound:
     MOV AX, [TEMP_Y]
     CMP AX, 12
-    JAE DeactB
+    JB BulletInBounds
+    JMP DeactB
+BulletInBounds:
 
     PUSH BX
     MOV AL, BYTE PTR [TEMP_X]
@@ -2903,7 +2942,9 @@ DAMAGE_ENEMY PROC
     XOR SI, SI
 FindEnemyLp:
     CMP [ENEMY_ACTIVE + SI], 1
-    JNE DmgNext
+    JE EnemyIsActive
+    JMP DmgNext
+EnemyIsActive:
     MOV DI, [TEMP_WORD]
     CMP BYTE PTR [BULLET_OWNER + DI], 1
     JNE DmgCheckPos
@@ -2911,10 +2952,14 @@ FindEnemyLp:
 DmgCheckPos:
     MOV AX, [TEMP_X]
     CMP AL, [ENEMY_GRID_X + SI]
-    JNE DmgNext
+    JE DmgCheckY
+    JMP DmgNext
+DmgCheckY:
     MOV AX, [TEMP_Y]
     CMP AL, [ENEMY_GRID_Y + SI]
-    JNE DmgNext
+    JE DmgHitEnemy
+    JMP DmgNext
+DmgHitEnemy:
 
     DEC BYTE PTR [ENEMY_HP + SI]
     JZ DmgKill
@@ -2968,7 +3013,9 @@ CheckExtraLife:
 
 DmgNext:
     INC SI
-    LOOP FindEnemyLp
+    DEC CX
+    JZ DmgDone
+    JMP FindEnemyLp
 DmgDone:
     POP DI
     POP SI
@@ -3223,4 +3270,6 @@ PauseWait:
     RET
 UPDATE_PAUSE ENDP
 
-    END
+_TEXT ENDS
+
+    END Start

@@ -5,6 +5,9 @@ build/*.map
 build/*.lst
 build/*.log
 
+# TASM cross-reference
+*.XRF
+
 # OS files
 .DS_Store
 Thumbs.db
