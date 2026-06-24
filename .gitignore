@@ -3,6 +3,7 @@ build/*.obj
 build/*.exe
 build/*.map
 build/*.lst
+build/*.log
 
 # OS files
 .DS_Store
