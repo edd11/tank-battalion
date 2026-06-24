@@ -1,5 +1,8 @@
-# Build output
-build/
+# Build output (keep directory, ignore artifacts)
+build/*.obj
+build/*.exe
+build/*.map
+build/*.lst
 
 # OS files
 .DS_Store
@@ -11,6 +14,3 @@ Thumbs.db
 *~
 .vscode/
 .idea/
-
-# DOSBox config
-*.conf
