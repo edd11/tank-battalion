@@ -1,0 +1,16 @@
+# Build output
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# DOSBox config
+*.conf
